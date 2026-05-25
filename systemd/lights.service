@@ -5,7 +5,7 @@ After=network-online.target
 [Service]
 Type=simple
 WorkingDirectory={{ PROJECT_DIR }}
-ExecStart={{ PROJECT_DIR }}/.venv/bin/uv run python lights.py
+ExecStart={{ UV }} run python lights.py
 Restart=always
 RestartSec=5
 StandardOutput=journal
