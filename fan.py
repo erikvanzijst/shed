@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import time
+from functools import partial
 from threading import Thread
 
 import pigpio
@@ -15,6 +16,7 @@ TACH_PIN = 27
 PWM_PIN = 18            # Hardware PWM pin
 PWM_FREQUENCY = 25000   # 25 kHz as per the Intel spec
 PULSES_PER_REV = 2
+BOOT_DUTY_PCT = 30
 PUSH_INTERVAL = 1
 
 MQTT_HOST = os.environ.get("MQTT_HOST", "192.168.0.110")
@@ -57,8 +59,6 @@ duty_config = {
 
 rpm = 0
 last_tick = None
-duty_pct = 0
-pi: pigpio.pi = None
 
 
 def tach_callback(gpio, level, tick):
@@ -71,23 +71,23 @@ def tach_callback(gpio, level, tick):
         last_tick = tick
 
 
-def set_duty(pct):
-    global duty_pct
-    duty_pct = pct
+def set_duty(pi, client, pct):
     # Invert percentage because PWM drives an N-FET that acts as an inverter
     pi.hardware_PWM(PWM_PIN, PWM_FREQUENCY, int((100 - pct) * 10000))
+    client.publish(DUTY_STATE, pct, retain=True)
+
     print(f"Set PWM to {pct}% at {PWM_FREQUENCY} Hz")
 
 
-def on_connect(client, userdata, flags, reason_code, properties):
+def on_connect(pi, client, userdata, flags, reason_code, properties):
     print("MQTT connected:", reason_code)
     client.publish(RPM_DISCOVERY,  json.dumps(rpm_config),  retain=True)
     client.publish(DUTY_DISCOVERY, json.dumps(duty_config), retain=True)
     client.subscribe(DUTY_CMD)
-    client.publish(DUTY_STATE, duty_pct, retain=True)
+    set_duty(pi, client, BOOT_DUTY_PCT)
 
 
-def on_message(client, userdata, msg):
+def on_message(pi: pigpio.pi, client, userdata, msg):
     try:
         pct = int(msg.payload.decode().strip())
     except ValueError:
@@ -96,13 +96,11 @@ def on_message(client, userdata, msg):
     if not (0 <= pct <= 100):
         print(f"Duty cycle out of range: {pct}", file=sys.stderr)
         return
-    set_duty(pct)
-    client.publish(DUTY_STATE, pct, retain=True)
+
+    set_duty(pi, client, pct)
 
 
 def main():
-    global pi
-
     pi = pigpio.pi()
     if not pi.connected:
         print("Failed to connect to pigpio daemon", file=sys.stderr)
@@ -117,8 +115,8 @@ def main():
         ha = mqtt.Client(
             callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
             client_id=CLIENT_ID)
-        ha.on_connect = on_connect
-        ha.on_message = on_message
+        ha.on_connect = partial(on_connect, pi)
+        ha.on_message = partial(on_message, pi)
         ha.username_pw_set(
             os.environ.get("MQTT_USERNAME", "mqtt"),
             os.environ.get("MQTT_PASSWORD", "mqtt"),
