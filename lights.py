@@ -51,7 +51,7 @@ pi = pigpio.pi()
 if not pi.connected:
     raise RuntimeError("Cannot connect to pigpiod")
 pi.set_mode(PIN, pigpio.OUTPUT)
-
+pi.write(PIN, 1)    # Start with the lights off
 
 ha = mqtt.Client(
     callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
@@ -64,7 +64,7 @@ ha.username_pw_set(
 
 
 def relay_is_on():
-    return pi.read(PIN) == 1
+    return pi.read(PIN) == 0
 
 def publish_state():
     ha.publish(
@@ -92,10 +92,10 @@ def on_message(client, userdata, msg):
     print(f"Switching lights {payload}")
 
     if payload == "ON":
-        pi.write(PIN, 1)
+        pi.write(PIN, 0)
 
     elif payload == "OFF":
-        pi.write(PIN, 0)
+        pi.write(PIN, 1)
 
     publish_state()
 
@@ -113,6 +113,6 @@ try:
     ha.loop_forever()
 
 finally:
-    pi.write(PIN, 0)
+    pi.write(PIN, 1)
     pi.stop()
 
