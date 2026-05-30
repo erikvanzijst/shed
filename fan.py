@@ -57,18 +57,27 @@ duty_config = {
     "device": _DEVICE,
 }
 
-rpm = 0
-last_tick = None
+class Tachometer:
+    _STALE_THRESHOLD = 2.0  # seconds without a pulse → report 0 RPM
 
+    def __init__(self):
+        self._rpm = 0.0
+        self._last_tick = None
+        self._last_pulse = None
 
-def tach_callback(gpio, level, tick):
-    global last_tick, rpm
+    def callback(self, gpio, level, tick):
+        if level == 0:
+            if self._last_tick is not None:
+                dt = pigpio.tickDiff(self._last_tick, tick)  # microseconds
+                self._rpm = 60_000_000 / (dt * PULSES_PER_REV)
+                self._last_pulse = time.monotonic()
+            self._last_tick = tick
 
-    if level == 0:
-        if last_tick is not None:
-            dt = pigpio.tickDiff(last_tick, tick)  # microseconds
-            rpm = 60_000_000 / (dt * PULSES_PER_REV)
-        last_tick = tick
+    @property
+    def rpm(self):
+        if self._last_pulse is None or time.monotonic() - self._last_pulse > self._STALE_THRESHOLD:
+            return 0
+        return self._rpm
 
 
 def set_duty(pi, client, pct):
@@ -110,7 +119,9 @@ def main():
         pi.set_mode(TACH_PIN, pigpio.INPUT)
         pi.set_pull_up_down(TACH_PIN, pigpio.PUD_UP)
         pi.set_glitch_filter(TACH_PIN, 1000)  # ignore pulses < 1ms
-        cb = pi.callback(TACH_PIN, pigpio.FALLING_EDGE, tach_callback)
+
+        tach = Tachometer()
+        cb = pi.callback(TACH_PIN, pigpio.FALLING_EDGE, tach.callback)
 
         ha = mqtt.Client(
             callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
@@ -125,8 +136,8 @@ def main():
 
         def report_rpm():
             while True:
-                print(f"RPM: {rpm:.0f}", flush=True)
-                ha.publish(RPM_STATE, round(rpm), retain=True)
+                print(f"RPM: {tach.rpm:.0f}", flush=True)
+                ha.publish(RPM_STATE, round(tach.rpm), retain=True)
                 time.sleep(PUSH_INTERVAL)
         Thread(target=report_rpm, daemon=True).start()
 
