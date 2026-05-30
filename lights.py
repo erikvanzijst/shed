@@ -89,7 +89,7 @@ def on_connect(client, userdata, flags, reason_code, properties):
 
 def on_message(client, userdata, msg):
     payload = msg.payload.decode().strip().upper()
-    print(f"Switching lights {payload}")
+    print(f"Switching lights {payload}", flush=True)
 
     if payload == "ON":
         pi.write(PIN, 0)

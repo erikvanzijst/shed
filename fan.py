@@ -76,7 +76,7 @@ def set_duty(pi, client, pct):
     pi.hardware_PWM(PWM_PIN, PWM_FREQUENCY, int((100 - pct) * 10000))
     client.publish(DUTY_STATE, pct, retain=True)
 
-    print(f"Set PWM to {pct}% at {PWM_FREQUENCY} Hz")
+    print(f"Set PWM to {pct}% at {PWM_FREQUENCY} Hz", flush=True)
 
 
 def on_connect(pi, client, userdata, flags, reason_code, properties):
@@ -125,7 +125,7 @@ def main():
 
         def report_rpm():
             while True:
-                print(f"RPM: {rpm:.0f}")
+                print(f"RPM: {rpm:.0f}", flush=True)
                 ha.publish(RPM_STATE, round(rpm), retain=True)
                 time.sleep(PUSH_INTERVAL)
         Thread(target=report_rpm, daemon=True).start()
