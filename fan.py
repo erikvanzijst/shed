@@ -46,7 +46,7 @@ rpm_config = {
 }
 
 duty_config = {
-    "name": "Shed Fan Duty Cycle",
+    "name": "Shed Fan Power Level",
     "command_topic": DUTY_CMD,
     "state_topic": DUTY_STATE,
     "min": 0,
