@@ -2,6 +2,7 @@
 import json
 import os
 import sys
+import threading
 import time
 from collections import deque
 from functools import partial
@@ -64,24 +65,27 @@ class Tachometer:
     def __init__(self):
         self._last_pulse = None
         self._pulses = deque(maxlen=1000)
+        self._lock = threading.Lock()
 
     def callback(self, gpio, level, tick):
         if level == 0:
-            self._pulses.append(tick)
-            self._last_pulse = time.monotonic()
-            # Purge expired pulses:
-            while pigpio.tickDiff(self._pulses[0], tick) > 5_000_000:
-                self._pulses.popleft()
+            with self._lock:
+                self._pulses.append(tick)
+                self._last_pulse = time.monotonic()
+                # Purge expired pulses:
+                while pigpio.tickDiff(self._pulses[0], tick) > 5_000_000:
+                    self._pulses.popleft()
 
 
     @property
     def rpm(self) -> int:
-        if (self._last_pulse is None or len(self._pulses) < 2 or
-                time.monotonic() - self._last_pulse > self._STALE_THRESHOLD):
-            return 0
-        else:
-            avg_pulse = pigpio.tickDiff(self._pulses[0], self._pulses[-1]) / (len(self._pulses) - 1)
-            return round(60_000_000 / (avg_pulse * PULSES_PER_REV))
+        with self._lock:
+            if (self._last_pulse is None or len(self._pulses) < 2 or
+                    time.monotonic() - self._last_pulse > self._STALE_THRESHOLD):
+                return 0
+            else:
+                avg_pulse = pigpio.tickDiff(self._pulses[0], self._pulses[-1]) / (len(self._pulses) - 1)
+                return round(60_000_000 / (avg_pulse * PULSES_PER_REV))
 
 
 def get_duty():
