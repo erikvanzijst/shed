@@ -17,8 +17,8 @@ TACH_PIN = 27
 PWM_PIN = 18            # Hardware PWM pin
 PWM_FREQUENCY = 25000   # 25 kHz as per the Intel spec
 PULSES_PER_REV = 2
-BOOT_DUTY_PCT = 30
-PUSH_INTERVAL = 1
+PUSH_INTERVAL = 5
+DUTY_CYCLE_FILE = "./var/duty_cycle"
 
 MQTT_HOST = os.environ.get("MQTT_HOST", "192.168.0.110")
 MQTT_PORT = int(os.environ.get("MQTT_PORT", 1883))
@@ -84,7 +84,20 @@ class Tachometer:
             return round(60_000_000 / (avg_pulse * PULSES_PER_REV))
 
 
+def get_duty():
+    try:
+        with open(DUTY_CYCLE_FILE, "r") as f:
+            return int(f.read())
+    except OSError as e:
+        print(f"Failed to read duty cycle file {DUTY_CYCLE_FILE}: {e}", file=sys.stderr)
+        return 0
+
+
 def set_duty(pi, client, pct):
+    os.makedirs(os.path.dirname(DUTY_CYCLE_FILE), exist_ok=True)
+    with open(DUTY_CYCLE_FILE, "w") as f:
+        f.write(str(pct))
+
     # Invert percentage because PWM drives an N-FET that acts as an inverter
     pi.hardware_PWM(PWM_PIN, PWM_FREQUENCY, int((100 - pct) * 10000))
     client.publish(DUTY_STATE, pct, retain=True)
@@ -97,7 +110,7 @@ def on_connect(pi, client, userdata, flags, reason_code, properties):
     client.publish(RPM_DISCOVERY,  json.dumps(rpm_config),  retain=True)
     client.publish(DUTY_DISCOVERY, json.dumps(duty_config), retain=True)
     client.subscribe(DUTY_CMD)
-    set_duty(pi, client, BOOT_DUTY_PCT)
+    set_duty(pi, client, get_duty())
 
 
 def on_message(pi: pigpio.pi, client, userdata, msg):
