@@ -2,11 +2,10 @@
 import json
 import os
 import sys
-import threading
 import time
 from collections import deque
 from functools import partial
-from threading import Thread
+from threading import Thread, Lock
 
 import pigpio
 import paho.mqtt.client as mqtt
@@ -40,7 +39,7 @@ _DEVICE = {
 }
 
 rpm_config = {
-    "name": "Fan Speed",
+    "name": "Speed",
     "state_topic": RPM_STATE,
     "unit_of_measurement": "RPM",
     "unique_id": "shed_fan_rpm",
@@ -48,7 +47,7 @@ rpm_config = {
 }
 
 duty_config = {
-    "name": "Fan Power",
+    "name": "Power",
     "command_topic": DUTY_CMD,
     "state_topic": DUTY_STATE,
     "min": 0,
@@ -65,7 +64,7 @@ class Tachometer:
     def __init__(self):
         self._last_pulse = None
         self._pulses = deque(maxlen=1000)
-        self._lock = threading.Lock()
+        self._lock = Lock()
 
     def callback(self, gpio, level, tick):
         if level == 0:
@@ -157,8 +156,12 @@ def main():
 
         def report_rpm():
             while True:
-                print(f"RPM: {tach.rpm}", flush=True)
-                ha.publish(RPM_STATE, tach.rpm, retain=True)
+                try:
+                    rpm = tach.rpm
+                    print(f"RPM: {rpm}", flush=True)
+                    ha.publish(RPM_STATE, rpm, retain=True)
+                except Exception as e:
+                    print(f"Failed to report RPM: {e}", file=sys.stderr)
                 time.sleep(PUSH_INTERVAL)
         Thread(target=report_rpm, daemon=True).start()
 
