@@ -69,7 +69,7 @@ class Tachometer:
         if level == 0:
             self._pulses.append(tick)
             self._last_pulse = time.monotonic()
-            # Purge pulses older than 1s
+            # Purge expired pulses:
             while pigpio.tickDiff(self._pulses[0], tick) > 5_000_000:
                 self._pulses.popleft()
 
