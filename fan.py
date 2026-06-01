@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import time
+from collections import deque
 from functools import partial
 from threading import Thread
 
@@ -38,7 +39,7 @@ _DEVICE = {
 }
 
 rpm_config = {
-    "name": "Shed Fan RPM",
+    "name": "Fan Speed",
     "state_topic": RPM_STATE,
     "unit_of_measurement": "RPM",
     "unique_id": "shed_fan_rpm",
@@ -46,7 +47,7 @@ rpm_config = {
 }
 
 duty_config = {
-    "name": "Shed Fan Power Level",
+    "name": "Fan Power",
     "command_topic": DUTY_CMD,
     "state_topic": DUTY_STATE,
     "min": 0,
@@ -61,23 +62,26 @@ class Tachometer:
     _STALE_THRESHOLD = 2.0  # seconds without a pulse → report 0 RPM
 
     def __init__(self):
-        self._rpm = 0.0
-        self._last_tick = None
         self._last_pulse = None
+        self._pulses = deque(maxlen=1000)
 
     def callback(self, gpio, level, tick):
         if level == 0:
-            if self._last_tick is not None:
-                dt = pigpio.tickDiff(self._last_tick, tick)  # microseconds
-                self._rpm = 60_000_000 / (dt * PULSES_PER_REV)
-                self._last_pulse = time.monotonic()
-            self._last_tick = tick
+            self._pulses.append(tick)
+            self._last_pulse = time.monotonic()
+            # Purge pulses older than 1s
+            while pigpio.tickDiff(self._pulses[0], tick) > 5_000_000:
+                self._pulses.popleft()
+
 
     @property
-    def rpm(self):
-        if self._last_pulse is None or time.monotonic() - self._last_pulse > self._STALE_THRESHOLD:
+    def rpm(self) -> int:
+        if (self._last_pulse is None or len(self._pulses) < 2 or
+                time.monotonic() - self._last_pulse > self._STALE_THRESHOLD):
             return 0
-        return self._rpm
+        else:
+            avg_pulse = pigpio.tickDiff(self._pulses[0], self._pulses[-1]) / (len(self._pulses) - 1)
+            return round(60_000_000 / (avg_pulse * PULSES_PER_REV))
 
 
 def set_duty(pi, client, pct):
@@ -136,8 +140,8 @@ def main():
 
         def report_rpm():
             while True:
-                print(f"RPM: {tach.rpm:.0f}", flush=True)
-                ha.publish(RPM_STATE, round(tach.rpm), retain=True)
+                print(f"RPM: {tach.rpm}", flush=True)
+                ha.publish(RPM_STATE, tach.rpm, retain=True)
                 time.sleep(PUSH_INTERVAL)
         Thread(target=report_rpm, daemon=True).start()
 
