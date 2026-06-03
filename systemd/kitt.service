@@ -1,0 +1,16 @@
+[Unit]
+Description=MQTT Knight Rider (Home Assistant)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory={{ PROJECT_DIR }}
+ExecStart={{ UV }} run python kitt.py
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
+

@@ -7,6 +7,7 @@ Home Assistant scripts running on a Raspberry Pi 2 in the garden shed.
 - **`sensor.py`** — Reads temperature and humidity from an AHT20 sensor (I2C) and publishes values to Home Assistant via MQTT.
 - **`lights.py`** — Controls a relay connected to GPIO 17, exposing it as a switch in Home Assistant via MQTT discovery.
 - **`fan.py`** — Drives a PWM fan on GPIO 18 and reads RPM from a tachometer signal on GPIO 27; exposes both as Home Assistant entities via MQTT discovery. Duty cycle persists to disk so the fan speed survives restarts.
+- **`kitt.py`** — Switches an N-FET on GPIO 22 that powers an 8-LED Knight Rider protoboard, exposing it as a switch in Home Assistant via MQTT discovery.
 
 All scripts register themselves with Home Assistant's MQTT discovery protocol, so they appear automatically once the broker is reachable.
 
@@ -40,4 +41,5 @@ To view logs:
 journalctl --user -u lights.service -f
 journalctl --user -u dht-sensor.service -f
 journalctl --user -u fan.service -f
+journalctl --user -u kitt.service -f
 ```
