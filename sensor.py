@@ -24,7 +24,7 @@ HUM_STATE  = "home/shed/humidity"
 # -------------------------
 
 temp_config = {
-    "name": "Shed Temperature",
+    "name": "Temperature",
     "state_topic": TEMP_STATE,
     "unit_of_measurement": "°C",
     "device_class": "temperature",
@@ -38,7 +38,7 @@ temp_config = {
 }
 
 hum_config = {
-    "name": "Shed Humidity",
+    "name": "Relative humidity",
     "state_topic": HUM_STATE,
     "unit_of_measurement": "%",
     "device_class": "humidity",
